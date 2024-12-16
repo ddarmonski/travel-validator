@@ -18,7 +18,6 @@ SECRET_KEY = 'django-insecure-nv!#yuxz&wvw_r$6ej^!a+)^a@6t_scqqm)7qu2@#3#=_&b5zq
 DEBUG = True
 
 ALLOWED_HOSTS = ['localhost', '127.0.0.1', '.azurewebsites.net', 'travel-validator.azurewebsites.net'] 
-STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 
 CORS_ALLOW_ALL_HEADERS = True
@@ -66,8 +65,9 @@ REST_FRAMEWORK = {
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',  # Add this line
     'django.contrib.sessions.middleware.SessionMiddleware',
-    'corsheaders.middleware.CorsMiddleware',  # Add CORS middleware here
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -75,12 +75,18 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
+# Add this for whitenoise
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
 ROOT_URLCONF = 'backend.urls'
 
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR / 'templates'],  # Add templates directory for serving Vue frontend
+        'DIRS': [
+            BASE_DIR / 'templates',
+            BASE_DIR / 'frontend_build' 
+        ],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -150,10 +156,13 @@ USE_TZ = True
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.1/howto/static-files/
-STATIC_URL = 'static/'
 
-# Directory for Vue static files
-STATICFILES_DIRS = [BASE_DIR / 'frontend_build']
+STATIC_URL = '/static/'  # Add forward slash
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+STATICFILES_DIRS = [
+    BASE_DIR / 'frontend_build',
+    BASE_DIR / 'static'  # Add this if you have other static files
+]
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
