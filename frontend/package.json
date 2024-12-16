@@ -5,7 +5,7 @@
   "scripts": {
     "serve": "vue-cli-service serve",
     "build": "vue-cli-service build",
-"postbuild": "node -e \"const fs=require('fs'); const os=require('os'); if(os.platform()==='win32') {require('child_process').execSync('robocopy dist ..\\\\frontend_build /E')} else {require('child_process').execSync('cp -r dist/* ../frontend_build/')}\"",
+
     "lint": "vue-cli-service lint"
   },
   "dependencies": {
