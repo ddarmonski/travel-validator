@@ -34,9 +34,11 @@ jobs:
         run: |
           cd frontend
           npm install
+          # Remove postbuild script if it exists
+          npm pkg delete scripts.postbuild
           npm run build
       
-      - name: Collect Django static files
+      - name: Prepare static files
         run: |
           python manage.py collectstatic --noinput
       
