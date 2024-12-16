@@ -84,8 +84,8 @@ TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
         'DIRS': [
-            BASE_DIR / 'templates',
-            BASE_DIR / 'frontend_build' 
+            os.path.join(BASE_DIR, 'templates'),  # This is where index.html will go
+            os.path.join(BASE_DIR, 'staticfiles'),  # This is where static files will go
         ],
         'APP_DIRS': True,
         'OPTIONS': {
@@ -157,13 +157,11 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.1/howto/static-files/
 
-STATIC_URL = '/static/'  # Add forward slash
+STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 STATICFILES_DIRS = [
-    BASE_DIR / 'frontend_build',
-    BASE_DIR / 'static'  # Add this if you have other static files
+    os.path.join(BASE_DIR, 'static'),
 ]
-
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

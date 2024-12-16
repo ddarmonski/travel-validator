@@ -1,9 +1,9 @@
 const { defineConfig } = require('@vue/cli-service')
 module.exports = defineConfig({
   transpileDependencies: true,
-  publicPath: process.env.NODE_ENV === 'production' ? '/static/' : '/',
+  publicPath: '/static/',
   outputDir: '../staticfiles',
-  assetsDir: '',
+  indexPath: '../templates/index.html',
   devServer: {
     proxy: {
       '/api': {
