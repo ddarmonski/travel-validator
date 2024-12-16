@@ -1,0 +1,32 @@
+trigger:
+- main
+
+variables:
+  pythonVersion: '3.11'
+  nodeVersion: '18.x'
+
+steps:
+- task: NodeTool@0
+  inputs:
+    versionSpec: $(nodeVersion)
+  displayName: 'Install Node.js'
+
+- task: UsePythonVersion@0
+  inputs:
+    versionSpec: $(pythonVersion)
+  displayName: 'Use Python $(pythonVersion)'
+
+- script: |
+    cd frontend
+    npm install
+    npm run build
+  displayName: 'Build Vue frontend'
+
+- script: |
+    python -m pip install --upgrade pip
+    pip install -r requirements.txt
+  displayName: 'Install Python dependencies'
+
+- script: |
+    python manage.py collectstatic --noinput
+  displayName: 'Collect static files'

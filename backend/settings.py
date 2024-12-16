@@ -17,7 +17,9 @@ SECRET_KEY = 'django-insecure-nv!#yuxz&wvw_r$6ej^!a+)^a@6t_scqqm)7qu2@#3#=_&b5zq
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1'] 
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', '.azurewebsites.net', 'travel-validator.azurewebsites.net'] 
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+
 
 CORS_ALLOW_ALL_HEADERS = True
 CORS_ALLOW_METHODS = [
@@ -159,10 +161,12 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # CORS configuration
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:8080",  # Vue development server
+    "http://localhost:8080",  
+    "https://travel-validator.azurewebsites.net",
 ]
 
 # Set this for additional security if needed
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:8080",
+    "https://travel-validator.azurewebsites.net",
 ]
