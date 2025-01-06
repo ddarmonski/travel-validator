@@ -104,6 +104,7 @@
             <InteractiveReportPreview
               v-else-if="generatedReport"
               :reportData="generatedReport"
+              :originalFiles="uploadedFiles"
               @save="handleSaveReport"
               @submit="handleSubmitReport"
             />
@@ -164,28 +165,21 @@ export default {
       const handleSubmitReport = async (reportData) => {
         try {
           console.log('UploadReport - Sending report data:', reportData);
+          console.log('UploadReport - Files being sent:', reportData.files);
+          //const response = await ApiService.submitReport(reportData);
           const response = await ApiService.submitReport({
-            requester: reportData.requester,
-            department: reportData.department,
-            position: reportData.position,
-            start_date: reportData.start_date,
-            end_date: reportData.end_date,
-            total_amount: parseFloat(reportData.total_amount),
-            expenses: reportData.expenses.map(exp => ({
-              id: exp.id,
-              date: exp.date,
-              category: exp.category,
-              description: exp.description,
-              amount: parseFloat(exp.amount)
-            })),
-            uploaded_files: reportData.uploaded_files
+            ...reportData,
+            files: uploadedFiles.value // Make sure we're sending the actual File objects
           });
           
-          console.log('Submit response:', response);
-          
+          if (response.data) {    
+            // Handle successful submission
+            console.log('Report submitted successfully!');
+            // Optionally redirect or clear the form
+          }
         } catch (error) {
           console.error('Error submitting report:', error);
-          
+          alert(error.message || 'Error submitting report');
         }
       };
 
@@ -236,21 +230,16 @@ export default {
     const generateReport = async () => {
       try {
         isGenerating.value = true;
-        const formData = new FormData();
         
-        uploadedFiles.value.forEach((file, index) => {
-          formData.append(`file${index}`, file);
-        });
-
-        const response = await ApiService.generateReport(formData);
+        // Send files directly to generateReport
+        const response = await ApiService.generateReport(uploadedFiles.value);
         
         if (response.data) {
-          generatedReport.value = response.data;  // Now contains extracted_data
+          generatedReport.value = response.data;
         }
       } catch (error) {
         console.error('Error generating report:', error);
-        const errorMessage = error.response?.data?.error || 'Error generating report. Please try again.';
-        alert(errorMessage);
+        alert(error.message || 'Error generating report. Please try again.');
       } finally {
         isGenerating.value = false;
       }

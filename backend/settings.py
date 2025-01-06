@@ -110,11 +110,17 @@ COSMOS_DB = {
 # Azure Blob Storage Configuration
 AZURE_STORAGE = {
     'CONNECTION_STRING': os.getenv('AZURE_STORAGE_CONNECTION_STRING', ''),
-    'CONTAINER_NAME': os.getenv('AZURE_STORAGE_CONTAINER_NAME', 'travel-docs'),
+    'CONTAINER_NAME': os.getenv('AZURE_STORAGE_CONTAINER_NAME', ''),
     'ALLOWED_FILE_TYPES': ['application/pdf'],
     'MAX_FILE_SIZE': 10 * 1024 * 1024  # 10MB
 }
 
+AZURE_OPENAI = {
+    'KEY': os.getenv('AZURE_OPENAI_KEY', ''),
+    'ENDPOINT': os.getenv('AZURE_OPENAI_ENDPOINT', ''),
+    'API_VERSION': os.getenv('AZURE_OPENAI_API', ''),
+    'DEPLOYMENT': os.getenv('AZURE_OPENAI_DEPLOYMENT', ''),
+}
 
 WSGI_APPLICATION = 'backend.wsgi.application'
 

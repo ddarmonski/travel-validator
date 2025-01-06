@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 class CosmosDB:
     def __init__(self):
-
+        
         endpoint = settings.COSMOS_DB['ENDPOINT']
         key = settings.COSMOS_DB['PRIMARY_KEY']
         database = settings.COSMOS_DB['DATABASE']

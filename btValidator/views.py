@@ -13,16 +13,19 @@ from .serializers import (
     RequestHistorySerializer
 )
 from datetime import datetime
-
+from .utils import upload_to_blob_storage, upload_multiple_files, \
+    convert_pdfs_to_base64_images, call_openai_api, extract_json_from_text, cleanup_uploaded_files
 import logging
 from django.conf import settings
-import time 
+import time, json
+from rest_framework.parsers import MultiPartParser, FormParser
+
 logger = logging.getLogger(__name__)
 
 from rest_framework.permissions import AllowAny
 
 class TravelRequestViewSet(ViewSet):
-    # permission_classes = [IsAuthenticated]
+    #permission_classes = [IsAuthenticated]
     permission_classes = [AllowAny]  # Temporarily allow all requests
     serializer_class = TravelRequestSerializer
     
@@ -36,6 +39,14 @@ class TravelRequestViewSet(ViewSet):
         self.cosmos_db = CosmosDB()
 
     def list(self, request):
+
+        logger.info("=== Authenticated User Details ===")
+        logger.info(f"User Name: {request.headers.get('X-MS-CLIENT-PRINCIPAL-NAME')}")
+        logger.info(f"User Email: {request.headers.get('X-MS-CLIENT-PRINCIPAL-USERNAME')}")
+        logger.info(f"Principal ID: {request.headers.get('X-MS-CLIENT-PRINCIPAL-ID')}")
+        logger.info("=== Headers ===")
+        logger.info(dict(request.headers))
+
         travel_requests = self.cosmos_db.list_travel_requests()
         serializer = TravelRequestSerializer(travel_requests, many=True)
         return Response(serializer.data)
@@ -179,11 +190,14 @@ class TravelRequestViewSet(ViewSet):
     @action(detail=False, methods=['post'], url_path='generate-report')
     def generate_report(self, request):
         """
-        Handle file uploads and return extracted data without saving to database
+        Process uploaded PDFs and extract expense information
         """
+        
         try:
-            files = list(request.FILES.values())
+            # Get files from request
+            files = request.FILES.getlist('files')
             
+            # Validate files
             if not files:
                 return Response(
                     {'error': 'No files provided'}, 
@@ -195,55 +209,104 @@ class TravelRequestViewSet(ViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            # Validate files
+            # Validate each file
             for file in files:
-                if file.size > 10 * 1024 * 1024:  # 10MB limit
+                if file.size > settings.AZURE_STORAGE['MAX_FILE_SIZE']:
                     return Response(
                         {'error': f'File {file.name} exceeds 10MB limit'}, 
                         status=status.HTTP_400_BAD_REQUEST
                     )
                 
-                if not file.name.lower().endswith('.pdf'):
+                if file.content_type not in settings.AZURE_STORAGE['ALLOWED_FILE_TYPES']:
                     return Response(
                         {'error': f'File {file.name} is not a PDF'}, 
                         status=status.HTTP_400_BAD_REQUEST
                     )
 
-            # Dummy extracted data (in real implementation, this would come from PDF extraction)
+            # Convert PDFs to base64 images
+            try:
+                base64_images = convert_pdfs_to_base64_images(files)
+                logger.info(f"Successfully converted {len(base64_images)} pages to images")
+            except Exception as e:
+                logger.error(f"Error converting PDFs: {str(e)}")
+                return Response(
+                    {'error': f'Error processing PDF files: {str(e)}'}, 
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+
+            # Define schema for expense extraction
+            schema = {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "date": {
+                            "type": "string",
+                            "format": "date",
+                            "description": "Date of the expense (YYYY-MM-DD)"
+                        },
+                        "category": {
+                            "type": "string",
+                            "description": "Category of expense (e.g., Transportation, Accommodation, Meals)"
+                        },
+                        "description": {
+                            "type": "string",
+                            "description": "Detailed description of the expense"
+                        },
+                        "amount": {
+                            "type": "number",
+                            "description": "Amount of the expense"
+                        }
+                    },
+                    "required": ["date", "category", "description", "amount"]
+                }
+            }
+
+            # Call OpenAI API for each image
+            try:
+                responses = call_openai_api(base64_images, json.dumps(schema))
+                logger.info(f"Received {len(responses)} responses from OpenAI")
+            except Exception as e:
+                logger.error(f"Error calling OpenAI API: {str(e)}")
+                return Response(
+                    {'error': f'Error extracting information: {str(e)}'}, 
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+
+            # Process responses and combine expenses
+            all_expenses = []
+            for response in responses:
+                try:
+                    expenses = extract_json_from_text(response)
+                    if isinstance(expenses, list):
+                        all_expenses.extend(expenses)
+                except json.JSONDecodeError as e:
+                    logger.warning(f"Error parsing OpenAI response: {str(e)}")
+                    continue
+
+            # Store file information for later upload
+            file_info = [{
+                'name': file.name,
+                'size': file.size,
+                'content_type': file.content_type
+            } for file in files]
+
+            # Prepare response with dummy data and extracted expenses
             extracted_data = {
                 'requester': 'John Doe',
                 'department': 'Engineering',
                 'position': 'Software Engineer',
                 'start_date': '2024-01-15',
                 'end_date': '2024-01-20',
-                'total_amount': 1250.50,
-                'expenses': [
-                    {
-                        'id': '1',
-                        'date': '2024-01-15',
-                        'category': 'Transportation',
-                        'description': 'Flight to New York',
-                        'amount': 450.00
-                    },
-                    {
-                        'id': '2',
-                        'date': '2024-01-16',
-                        'category': 'Accommodation',
-                        'description': 'Hotel Stay',
-                        'amount': 800.50
-                    }
-                ],
-                'uploaded_files': [
-                    {
-                        'name': file.name,
-                        'size': file.size
-                    } for file in files
-                ]
+                'total_amount': sum(expense['amount'] for expense in all_expenses if 'amount' in expense),
+                'expenses': all_expenses,
+                'files': file_info
             }
 
             return Response(extracted_data, status=status.HTTP_200_OK)
 
         except Exception as e:
+            logger.error(f"Error in generate_report: {str(e)}")
             return Response(
                 {'error': f'Error processing request: {str(e)}'}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -294,56 +357,82 @@ class TravelRequestViewSet(ViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-    @action(detail=False, methods=['post'], url_path='submit-report')
+    @action(detail=False, methods=['post'], url_path='submit-report', parser_classes=[MultiPartParser, FormParser])
     def submit_report(self, request):
         """
         Create a new travel request from the user-validated extracted data
         """
-          
+        uploaded_files = []
         try:
-            time.sleep(2)
-            data = request.data
-            print(f"Received data for submit_report: {data}")  # Add this logging
+            # Get files from request
+            files = request.FILES.getlist('files')
+            print(files)
             
+            # Parse the JSON data from the form
+            try:
+                # If data is sent as a string, parse it
+                if isinstance(request.data.get('data'), str):
+                    data = json.loads(request.data.get('data', '{}'))
+                else:
+                    data = request.data.get('data', {})
+                logger.info(f"Received data for submit_report: {data}")
+            except json.JSONDecodeError as e:
+                logger.error(f"Error parsing JSON data: {str(e)}")
+                return Response(
+                    {'error': 'Invalid JSON data provided'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            if files:
+                try:
+                    uploaded_files = upload_multiple_files(files)
+                    logger.info(f"Successfully uploaded {len(uploaded_files)} files to blob storage")
+                except Exception as e:
+                    logger.error(f"Error uploading files: {str(e)}")
+                    return Response(
+                        {'error': f'Error uploading files: {str(e)}'}, 
+                        status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                    )
+
             # Create new travel request with explicit data mapping
             request_data = {
-                'requester': str(data.get('requester')),  # Convert to string explicitly
+                'requester': str(data.get('requester', '')),
                 'status': 'PENDING_REVIEW',
-                'department': str(data.get('department')),
-                'position': str(data.get('position')),
+                'department': str(data.get('department', '')),
+                'position': str(data.get('position', '')),
                 'start_date': data.get('start_date'),
                 'end_date': data.get('end_date'),
                 'total_amount': float(data.get('total_amount', 0))
             }
             
-            print(f"Mapped request data: {request_data}")  # Add this logging
-            
+            logger.info(f"Creating travel request with data: {request_data}")
             travel_request = TravelRequest(**request_data)
 
             # Handle expenses
             expenses = []
             for expense_data in data.get('expenses', []):
                 expense = Expense(
-                    id=expense_data.get('id'),  # Include id if present
-                    category=str(expense_data.get('category')),
-                    description=str(expense_data.get('description')),
+                    id=expense_data.get('id'),
+                    category=str(expense_data.get('category', '')),
+                    description=str(expense_data.get('description', '')),
                     amount=float(expense_data.get('amount', 0)),
                     date=expense_data.get('date')
                 )
                 expenses.append(expense)
             travel_request.expenses = expenses
 
-            # Handle uploaded files
-            if isinstance(data.get('uploaded_files'), list):  # Check if it's a list
+            # Handle documents from uploaded files
+            if uploaded_files:
                 documents = []
-                for file_info in data.get('uploaded_files', []):
+                for file_info in uploaded_files:
                     document = Document(
-                        file_name=str(file_info.get('name')),
-                        file_size=int(file_info.get('size', 0)),
-                        file_url="placeholder_url"
+                        file_name=str(file_info['name']),
+                        file_size=int(file_info['size']),
+                        file_url=str(file_info['url'])
                     )
                     documents.append(document)
                 travel_request.documents = documents
+                logger.info(f"Added {len(documents)} documents to travel request")
 
             # Add initial history entry
             history_entry = RequestHistory(
@@ -354,20 +443,20 @@ class TravelRequestViewSet(ViewSet):
             )
             travel_request.history = [history_entry]
 
-            # Log the complete travel request before saving
-            print(f"Travel request before save: {travel_request.to_dict()}")
-
             # Save to Cosmos DB
             created_request = self.cosmos_db.create_travel_request(travel_request)
-            print(f"Created request response: {created_request}")  # Add this logging
+            logger.info(f"Successfully created travel request with ID: {created_request['id']}")
 
             return Response({
                 'message': 'Report submitted successfully',
-                'request_id': created_request['id']
+                'request_id': created_request['id'],
+                'uploaded_files': uploaded_files
             }, status=status.HTTP_201_CREATED)
 
         except Exception as e:
             logger.error(f"Error in submit_report: {str(e)}")
+            if 'uploaded_files' in locals() and uploaded_files:
+                cleanup_uploaded_files(uploaded_files)
             return Response(
                 {'error': f'Error submitting report: {str(e)}'}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR

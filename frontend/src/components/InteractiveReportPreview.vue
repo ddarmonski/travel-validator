@@ -217,7 +217,11 @@
       reportData: {
         type: Object,
         required: true
-      }
+      },
+      originalFiles: { 
+        type: Array,
+        default: () => []
+    }
     },
   
     emits: ['submit'],
@@ -322,41 +326,44 @@
       }
   
       const confirmSubmit = async () => {
-        try {
-            isProcessing.value = true;
-            const reportData = {
-            requester: editableFields.value.requester.value,
-            department: editableFields.value.department.value,
-            position: editableFields.value.position.value,
-            start_date: editableFields.value.start_date.value,
-            end_date: editableFields.value.end_date.value,
-            total_amount: parseFloat(editableFields.value.total_amount.value),
-            expenses: expenses.value.map(expense => ({
-                id: expense.id,
-                date: expense.date,
-                category: expense.category,
-                description: expense.description,
-                amount: parseFloat(expense.amount)
-            })),
-            uploaded_files: props.reportData.uploaded_files || []
-            }
-
-            await emit('submit', reportData)
-            showConfirmModal.value = false
-            isSubmitted.value = true
-            
-            // Show and automatically hide success message
-            showSuccessMessage.value = true
-            setTimeout(() => {
-            showSuccessMessage.value = false
-            }, 3000)
-        } catch (error) {
-            console.error('Error submitting report:', error)
-        } finally {
-            isProcessing.value = false
-        }
-        }
-  
+          try {
+              isProcessing.value = true;
+              console.log('Original report data:', props.reportData); // Add this log
+              
+              const reportData = {
+                  requester: editableFields.value.requester.value,
+                  department: editableFields.value.department.value,
+                  position: editableFields.value.position.value,
+                  start_date: editableFields.value.start_date.value,
+                  end_date: editableFields.value.end_date.value,
+                  total_amount: parseFloat(editableFields.value.total_amount.value),
+                  expenses: expenses.value.map(expense => ({
+                      id: expense.id,
+                      date: expense.date,
+                      category: expense.category,
+                      description: expense.description,
+                      amount: parseFloat(expense.amount)
+                  })),
+                  files: props.originalFiles
+                  //uploaded_files: props.reportData.uploaded_files || []
+              }
+              
+              console.log('Submitting report with data:', reportData); // Add this log
+              await emit('submit', reportData)
+              showConfirmModal.value = false
+              isSubmitted.value = true
+              
+              showSuccessMessage.value = true
+              setTimeout(() => {
+                  showSuccessMessage.value = false
+              }, 3000)
+          } catch (error) {
+              console.error('Error submitting report:', error)
+          } finally {
+              isProcessing.value = false
+          }
+          }
+        
       return {
         editableFields,
         expenses,
